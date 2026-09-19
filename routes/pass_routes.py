@@ -1,0 +1,99 @@
+from datetime import datetime
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
+
+from models import db, PassApplication, BusRoute
+
+pass_bp = Blueprint("pass_bp", __name__)
+
+VALID_PASS_TYPES = {"monthly", "quarterly", "yearly"}
+
+
+@pass_bp.route("/apply", methods=["POST"])
+@jwt_required()
+def apply_for_pass():
+    user_id = int(get_jwt_identity())
+    data = request.get_json(force=True, silent=True) or {}
+
+    route_id = data.get("route_id")
+    pass_type = data.get("pass_type")
+
+    if not route_id:
+        return jsonify({"success": False, "message": "route_id is required."}), 400
+
+    if pass_type not in VALID_PASS_TYPES:
+        return jsonify({"success": False, "message": f"pass_type must be one of {list(VALID_PASS_TYPES)}."}), 400
+
+    route = BusRoute.query.get(route_id)
+    if not route:
+        return jsonify({"success": False, "message": "Route does not exist."}), 404
+
+    existing = PassApplication.query.filter_by(
+        user_id=user_id, route_id=route_id
+    ).filter(PassApplication.status.in_(["pending", "approved"])).first()
+
+    if existing:
+        return jsonify({
+            "success": False,
+            "message": f"You already have a {existing.status} application for this route."
+        }), 409
+
+    application = PassApplication(
+        user_id=user_id,
+        route_id=route_id,
+        pass_type=pass_type,
+        status="pending",
+    )
+    db.session.add(application)
+    db.session.commit()
+
+    return jsonify({"success": True, "application": application.to_dict()}), 201
+
+
+@pass_bp.route("/my-applications", methods=["GET"])
+@jwt_required()
+def my_applications():
+    user_id = int(get_jwt_identity())
+    apps = PassApplication.query.filter_by(user_id=user_id).order_by(PassApplication.applied_on.desc()).all()
+    return jsonify({"success": True, "applications": [a.to_dict() for a in apps]}), 200
+
+
+@pass_bp.route("/status/<int:application_id>", methods=["GET"])
+@jwt_required()
+def check_status(application_id):
+    user_id = int(get_jwt_identity())
+    application = PassApplication.query.get(application_id)
+
+    if not application or application.user_id != user_id:
+        return jsonify({"success": False, "message": "Application not found."}), 404
+
+    return jsonify({"success": True, "status": application.status, "application": application.to_dict()}), 200
+
+
+@pass_bp.route("/renew/<int:application_id>", methods=["POST"])
+@jwt_required()
+def renew_pass(application_id):
+    user_id = int(get_jwt_identity())
+    application = PassApplication.query.get(application_id)
+
+    if not application or application.user_id != user_id:
+        return jsonify({"success": False, "message": "Application not found."}), 404
+
+    if application.status != "approved":
+        return jsonify({"success": False, "message": "Only approved passes can be renewed."}), 400
+
+    application.status = "expired"
+    new_application = PassApplication(
+        user_id=user_id,
+        route_id=application.route_id,
+        pass_type=application.pass_type,
+        status="pending",
+    )
+    db.session.add(new_application)
+    db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "message": "Renewal submitted for approval.",
+        "new_application": new_application.to_dict()
+    }), 201
