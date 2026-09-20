@@ -16,13 +16,11 @@ def create_app():
 
     # Allow the frontend (running on a different origin/port) to call this API.
     # List every frontend origin you'll actually use here.
-    CORS(app, resources={r"/api/*": {"origins": [
+        CORS(app, resources={r"/api/*": {"origins": [
         "http://127.0.0.1:5500",
         "http://localhost:5500",
-        # add your deployed frontend URL here too, e.g.:
-        # "https://your-frontend.netlify.app",
+        "https://buss-pass-frontend.onrender.com",
     ]}}, supports_credentials=True)
-
     # Attach extensions to the app
     db.init_app(app)
     bcrypt.init_app(app)

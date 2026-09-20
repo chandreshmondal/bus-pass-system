@@ -58,16 +58,14 @@ class PassApplication(db.Model):
     applied_on = db.Column(db.DateTime, default=datetime.utcnow)
     reviewed_on = db.Column(db.DateTime, nullable=True)
 
-    __table_args__ = (
-        db.UniqueConstraint("user_id", "route_id", "status", name="uq_user_route_status"),
-    )
-
     route = db.relationship("BusRoute")
 
     def to_dict(self):
         return {
             "id": self.id,
             "user_id": self.user_id,
+            "user_name": self.applicant.name if self.applicant else None,
+            "user_email": self.applicant.email if self.applicant else None,
             "route": self.route.to_dict() if self.route else None,
             "pass_type": self.pass_type,
             "status": self.status,
