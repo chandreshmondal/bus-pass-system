@@ -8,6 +8,29 @@ pass_bp = Blueprint("pass_bp", __name__)
 
 VALID_PASS_TYPES = {"monthly", "quarterly", "yearly"}
 
+# How many times the route's base fare a pass costs, per duration.
+# Based on real BEST pricing patterns (quarterly = 3x monthly, roughly linear),
+# with yearly getting a modest ~1-month discount vs strict 12x.
+PASS_TYPE_MULTIPLIERS = {
+    "monthly": 1,
+    "quarterly": 3,
+    "yearly": 11,
+}
+
+
+@pass_bp.route("/pricing/<int:route_id>", methods=["GET"])
+def get_pricing(route_id):
+    """Public endpoint - lets the frontend show a live price preview per pass type."""
+    route = BusRoute.query.get(route_id)
+    if not route:
+        return jsonify({"success": False, "message": "Route does not exist."}), 404
+
+    pricing = {
+        pass_type: round(route.fare * multiplier, 2)
+        for pass_type, multiplier in PASS_TYPE_MULTIPLIERS.items()
+    }
+    return jsonify({"success": True, "route_fare": route.fare, "pricing": pricing}), 200
+
 
 @pass_bp.route("/apply", methods=["POST"])
 @jwt_required()
@@ -42,6 +65,7 @@ def apply_for_pass():
         user_id=user_id,
         route_id=route_id,
         pass_type=pass_type,
+        amount=round(route.fare * PASS_TYPE_MULTIPLIERS[pass_type], 2),
         status="pending",
     )
     db.session.add(application)
@@ -94,6 +118,7 @@ def renew_pass(application_id):
         user_id=user_id,
         route_id=application.route_id,
         pass_type=application.pass_type,
+        amount=application.amount,
         status="pending",
     )
     db.session.add(new_application)
