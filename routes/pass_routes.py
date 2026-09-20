@@ -2,7 +2,7 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
-from models import db, PassApplication, BusRoute
+from models import db, PassApplication, BusRoute, Notification
 
 pass_bp = Blueprint("pass_bp", __name__)
 
@@ -45,6 +45,13 @@ def apply_for_pass():
         status="pending",
     )
     db.session.add(application)
+    db.session.commit()
+
+    notify = Notification(
+        user_id=user_id,
+        message=f"Your application for route {route.route_number} ({route.source} → {route.destination}) has been submitted and is pending approval."
+    )
+    db.session.add(notify)
     db.session.commit()
 
     return jsonify({"success": True, "application": application.to_dict()}), 201
@@ -97,3 +104,44 @@ def renew_pass(application_id):
         "message": "Renewal submitted for approval.",
         "new_application": new_application.to_dict()
     }), 201
+
+
+@pass_bp.route("/notifications", methods=["GET"])
+@jwt_required()
+def get_notifications():
+    user_id = int(get_jwt_identity())
+    notes = Notification.query.filter_by(user_id=user_id).order_by(Notification.created_at.desc()).all()
+    unread_count = Notification.query.filter_by(user_id=user_id, is_read=False).count()
+    return jsonify({
+        "success": True,
+        "notifications": [n.to_dict() for n in notes],
+        "unread_count": unread_count,
+    }), 200
+
+
+@pass_bp.route("/notifications/read", methods=["POST"])
+@jwt_required()
+def mark_notifications_read():
+    user_id = int(get_jwt_identity())
+    Notification.query.filter_by(user_id=user_id, is_read=False).update({"is_read": True})
+    db.session.commit()
+    return jsonify({"success": True, "message": "All notifications marked as read."}), 200
+
+
+@pass_bp.route("/verify/<int:application_id>", methods=["GET"])
+def verify_pass(application_id):
+    """Public endpoint for QR scanning - only exposes minimal, non-sensitive info."""
+    application = PassApplication.query.get(application_id)
+
+    if not application:
+        return jsonify({"success": False, "valid": False, "message": "Pass not found."}), 404
+
+    is_valid = application.status == "approved"
+
+    return jsonify({
+        "success": True,
+        "valid": is_valid,
+        "status": application.status,
+        "pass_type": application.pass_type,
+        "route": application.route.route_number if application.route else None,
+    }), 200

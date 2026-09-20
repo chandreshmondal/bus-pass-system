@@ -78,4 +78,9 @@ def login():
         additional_claims={"role": user.role},
     )
 
-    return jsonify({"success": True, "access_token": token, "user": user.to_dict()}), 200
+    return jsonify({
+        "success": True,
+        "access_token": token,
+        "token": token,  # duplicate key for frontend code expecting 'token'
+        "user": user.to_dict()
+    }), 200
