@@ -72,19 +72,7 @@ def create_app():
             "message": "Something went wrong on the server."
         }), 500
 
-    # TEMPORARY - remove this route after running it once
-    @app.route("/api/maintenance/add-amount-column")
-    def add_amount_column():
-        from sqlalchemy import text
-        try:
-            with db.engine.connect() as conn:
-                conn.execute(text(
-                    "ALTER TABLE pass_applications ADD COLUMN IF NOT EXISTS amount FLOAT;"
-                ))
-                conn.commit()
-            return jsonify({"success": True, "message": "Column added successfully."}), 200
-        except Exception as e:
-            return jsonify({"success": False, "message": str(e)}), 500
+
 
     return app
 
