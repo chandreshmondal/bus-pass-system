@@ -14,13 +14,12 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # Allow the frontend (running on a different origin/port) to call this API.
-    # List every frontend origin you'll actually use here.
-        CORS(app, resources={r"/api/*": {"origins": [
+    CORS(app, resources={r"/api/*": {"origins": [
         "http://127.0.0.1:5500",
         "http://localhost:5500",
         "https://buss-pass-frontend.onrender.com",
     ]}}, supports_credentials=True)
+
     # Attach extensions to the app
     db.init_app(app)
     bcrypt.init_app(app)
@@ -72,6 +71,20 @@ def create_app():
             "success": False,
             "message": "Something went wrong on the server."
         }), 500
+
+       # TEMPORARY - remove this route after running it once
+    @app.route("/api/maintenance/fix-constraint")
+    def fix_constraint():
+        from sqlalchemy import text
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text(
+                    "ALTER TABLE pass_applications DROP CONSTRAINT IF EXISTS uq_user_route_status;"
+                ))
+                conn.commit()
+            return jsonify({"success": True, "message": "Constraint dropped successfully."}), 200
+        except Exception as e:
+            return jsonify({"success": False, "message": str(e)}), 500
 
     return app
 
