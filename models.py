@@ -54,6 +54,7 @@ class PassApplication(db.Model):
     route_id = db.Column(db.Integer, db.ForeignKey("bus_routes.id"), nullable=False)
 
     pass_type = db.Column(db.String(20), nullable=False)  # 'monthly', 'quarterly', 'yearly'
+    trip_type = db.Column(db.String(20), nullable=False, default="one_way")  # 'one_way' or 'round_trip'
     amount = db.Column(db.Float, nullable=True)  # calculated price, set at application time
     status = db.Column(db.String(20), default="pending")  # pending/approved/rejected
     applied_on = db.Column(db.DateTime, default=datetime.utcnow)
@@ -69,6 +70,7 @@ class PassApplication(db.Model):
             "user_email": self.applicant.email if self.applicant else None,
             "route": self.route.to_dict() if self.route else None,
             "pass_type": self.pass_type,
+            "trip_type": self.trip_type,
             "amount": self.amount,
             "status": self.status,
             "applied_on": self.applied_on.isoformat(),

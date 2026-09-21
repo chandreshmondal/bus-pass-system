@@ -6,29 +6,40 @@ from models import db, PassApplication, BusRoute, Notification
 
 pass_bp = Blueprint("pass_bp", __name__)
 
-VALID_PASS_TYPES = {"monthly", "quarterly", "yearly"}
+VALID_PASS_TYPES = {"daily", "monthly", "quarterly", "yearly"}
 
-# How many times the route's base fare a pass costs, per duration.
-# Based on real BEST pricing patterns (quarterly = 3x monthly, roughly linear),
-# with yearly getting a modest ~1-month discount vs strict 12x.
+# Each pass type's price = route fare x trip type multiplier x this many "days",
+# with a discount baked in for longer commitments (no discount on daily).
+# Based on real BEST data (~15% monthly discount vs per-trip cost), scaled up
+# for quarterly/yearly to reward longer commitments.
 PASS_TYPE_MULTIPLIERS = {
-    "monthly": 1,
-    "quarterly": 3,
-    "yearly": 11,
+    "daily": 1 * 1,           # no discount
+    "monthly": 28 * 0.85,     # 15% off
+    "quarterly": 84 * 0.80,   # 20% off
+    "yearly": 308 * 0.70,     # 30% off
+}
+
+VALID_TRIP_TYPES = {"one_way", "round_trip"}
+TRIP_TYPE_MULTIPLIERS = {
+    "one_way": 1,
+    "round_trip": 2,
 }
 
 
 @pass_bp.route("/pricing/<int:route_id>", methods=["GET"])
 def get_pricing(route_id):
-    """Public endpoint - lets the frontend show a live price preview per pass type."""
+    """Public endpoint - lets the frontend show a live price preview per pass type and trip type."""
     route = BusRoute.query.get(route_id)
     if not route:
         return jsonify({"success": False, "message": "Route does not exist."}), 404
 
-    pricing = {
-        pass_type: round(route.fare * multiplier, 2)
-        for pass_type, multiplier in PASS_TYPE_MULTIPLIERS.items()
-    }
+    pricing = {}
+    for pass_type, pass_mult in PASS_TYPE_MULTIPLIERS.items():
+        pricing[pass_type] = {
+            trip_type: round(route.fare * pass_mult * trip_mult, 2)
+            for trip_type, trip_mult in TRIP_TYPE_MULTIPLIERS.items()
+        }
+
     return jsonify({"success": True, "route_fare": route.fare, "pricing": pricing}), 200
 
 
@@ -40,12 +51,16 @@ def apply_for_pass():
 
     route_id = data.get("route_id")
     pass_type = data.get("pass_type")
+    trip_type = data.get("trip_type", "one_way")  # defaults to one-way if not sent
 
     if not route_id:
         return jsonify({"success": False, "message": "route_id is required."}), 400
 
     if pass_type not in VALID_PASS_TYPES:
         return jsonify({"success": False, "message": f"pass_type must be one of {list(VALID_PASS_TYPES)}."}), 400
+
+    if trip_type not in VALID_TRIP_TYPES:
+        return jsonify({"success": False, "message": f"trip_type must be one of {list(VALID_TRIP_TYPES)}."}), 400
 
     route = BusRoute.query.get(route_id)
     if not route:
@@ -65,7 +80,8 @@ def apply_for_pass():
         user_id=user_id,
         route_id=route_id,
         pass_type=pass_type,
-        amount=round(route.fare * PASS_TYPE_MULTIPLIERS[pass_type], 2),
+        trip_type=trip_type,
+        amount=round(route.fare * PASS_TYPE_MULTIPLIERS[pass_type] * TRIP_TYPE_MULTIPLIERS[trip_type], 2),
         status="pending",
     )
     db.session.add(application)
@@ -118,6 +134,7 @@ def renew_pass(application_id):
         user_id=user_id,
         route_id=application.route_id,
         pass_type=application.pass_type,
+        trip_type=application.trip_type,
         amount=application.amount,
         status="pending",
     )
