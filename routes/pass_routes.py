@@ -185,5 +185,6 @@ def verify_pass(application_id):
         "valid": is_valid,
         "status": application.status,
         "pass_type": application.pass_type,
+        "trip_type": application.trip_type,
         "route": application.route.route_number if application.route else None,
     }), 200

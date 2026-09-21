@@ -72,13 +72,17 @@ def reject_application(application_id):
     if application.status != "pending":
         return jsonify({"success": False, "message": f"Cannot reject — status is '{application.status}'."}), 400
 
+    # Single generic auto-generated reason - no admin input needed
+    reason = "Rejected by admin after review."
+
     application.status = "rejected"
+    application.rejection_reason = reason
     application.reviewed_on = datetime.utcnow()
     db.session.commit()
 
     notify = Notification(
         user_id=application.user_id,
-        message=f"Your pass application (ID {application.id}) was rejected."
+        message=f"Your pass application (ID {application.id}) was rejected. Reason: {reason}"
     )
     db.session.add(notify)
     db.session.commit()

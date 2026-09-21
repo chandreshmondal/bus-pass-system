@@ -57,6 +57,7 @@ class PassApplication(db.Model):
     trip_type = db.Column(db.String(20), nullable=False, default="one_way")  # 'one_way' or 'round_trip'
     amount = db.Column(db.Float, nullable=True)  # calculated price, set at application time
     status = db.Column(db.String(20), default="pending")  # pending/approved/rejected
+    rejection_reason = db.Column(db.String(255), nullable=True)
     applied_on = db.Column(db.DateTime, default=datetime.utcnow)
     reviewed_on = db.Column(db.DateTime, nullable=True)
 
@@ -73,6 +74,7 @@ class PassApplication(db.Model):
             "trip_type": self.trip_type,
             "amount": self.amount,
             "status": self.status,
+            "rejection_reason": self.rejection_reason,
             "applied_on": self.applied_on.isoformat(),
             "reviewed_on": self.reviewed_on.isoformat() if self.reviewed_on else None,
         }
