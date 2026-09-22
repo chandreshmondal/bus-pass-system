@@ -56,6 +56,15 @@ class PassApplication(db.Model):
     pass_type = db.Column(db.String(20), nullable=False)  # 'monthly', 'quarterly', 'yearly'
     trip_type = db.Column(db.String(20), nullable=False, default="one_way")  # 'one_way' or 'round_trip'
     amount = db.Column(db.Float, nullable=True)  # calculated price, set at application time
+
+    # Applicant details collected per-application (demo only - see note on Aadhar below)
+    applicant_age = db.Column(db.Integer, nullable=True)
+    applicant_mobile = db.Column(db.String(15), nullable=True)
+    # NOTE: stored plain for academic demo purposes only. A real production system
+    # must not store raw Aadhar numbers without proper UIDAI authorization under
+    # the Aadhaar Act - this would normally be masked or tokenized.
+    aadhar_number = db.Column(db.String(20), nullable=True)
+
     status = db.Column(db.String(20), default="pending")  # pending/approved/rejected
     rejection_reason = db.Column(db.String(255), nullable=True)
     applied_on = db.Column(db.DateTime, default=datetime.utcnow)
@@ -73,6 +82,9 @@ class PassApplication(db.Model):
             "pass_type": self.pass_type,
             "trip_type": self.trip_type,
             "amount": self.amount,
+            "applicant_age": self.applicant_age,
+            "applicant_mobile": self.applicant_mobile,
+            "aadhar_number": self.aadhar_number,
             "status": self.status,
             "rejection_reason": self.rejection_reason,
             "applied_on": self.applied_on.isoformat(),

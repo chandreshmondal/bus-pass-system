@@ -1,10 +1,14 @@
 from datetime import datetime
+import re
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from models import db, PassApplication, BusRoute, Notification
 
 pass_bp = Blueprint("pass_bp", __name__)
+
+MOBILE_REGEX = re.compile(r"^\d{10}$")
+AADHAR_REGEX = re.compile(r"^\d{12}$")
 
 VALID_PASS_TYPES = {"daily", "monthly", "quarterly", "yearly"}
 
@@ -52,6 +56,9 @@ def apply_for_pass():
     route_id = data.get("route_id")
     pass_type = data.get("pass_type")
     trip_type = data.get("trip_type", "one_way")  # defaults to one-way if not sent
+    applicant_age = data.get("applicant_age")
+    applicant_mobile = data.get("applicant_mobile")
+    aadhar_number = data.get("aadhar_number")
 
     if not route_id:
         return jsonify({"success": False, "message": "route_id is required."}), 400
@@ -61,6 +68,20 @@ def apply_for_pass():
 
     if trip_type not in VALID_TRIP_TYPES:
         return jsonify({"success": False, "message": f"trip_type must be one of {list(VALID_TRIP_TYPES)}."}), 400
+
+    if applicant_age is not None:
+        try:
+            applicant_age = int(applicant_age)
+            if not (5 <= applicant_age <= 100):
+                return jsonify({"success": False, "message": "applicant_age must be between 5 and 100."}), 400
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "message": "applicant_age must be a number."}), 400
+
+    if applicant_mobile and not MOBILE_REGEX.match(applicant_mobile):
+        return jsonify({"success": False, "message": "applicant_mobile must be exactly 10 digits."}), 400
+
+    if aadhar_number and not AADHAR_REGEX.match(aadhar_number.replace(" ", "").replace("-", "")):
+        return jsonify({"success": False, "message": "aadhar_number must be exactly 12 digits."}), 400
 
     route = BusRoute.query.get(route_id)
     if not route:
@@ -82,6 +103,9 @@ def apply_for_pass():
         pass_type=pass_type,
         trip_type=trip_type,
         amount=round(route.fare * PASS_TYPE_MULTIPLIERS[pass_type] * TRIP_TYPE_MULTIPLIERS[trip_type], 2),
+        applicant_age=applicant_age,
+        applicant_mobile=applicant_mobile,
+        aadhar_number=aadhar_number,
         status="pending",
     )
     db.session.add(application)
